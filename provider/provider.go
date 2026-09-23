@@ -390,9 +390,16 @@ func generateConfiguration(servicesMap map[string][]internal.Service) *dynamic.C
 				loadBalancer.Servers = append(loadBalancer.Servers, dynamic.Server{
 					URL: serverURL,
 				})
-				
-				config.HTTP.Services[serviceName] = &dynamic.Service{
-					LoadBalancer: loadBalancer,
+
+				if existingService, exists := config.HTTP.Services[serviceName]; exists {
+					existingService.LoadBalancer.Servers = append(
+						existingService.LoadBalancer.Servers,
+						loadBalancer.Servers...,
+					)
+				} else {
+					config.HTTP.Services[serviceName] = &dynamic.Service{
+						LoadBalancer: loadBalancer,
+					}
 				}
 			}
 			

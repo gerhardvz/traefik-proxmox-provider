@@ -394,3 +394,81 @@ func TestHandleRouterTLS_ArrayDomains(t *testing.T) {
 		})
 	}
 }
+
+func TestGenerateConfiguration_AppendsMultipleLXCsToOneService(t *testing.T) {
+	// 1. Mock a services layout simulating two running LXC containers on the same node
+	mockServicesMap := map[string][]internal.Service{
+		"pve-node-01": {
+			{
+				ID:   101,
+				Name: "uat-01",
+				Config: map[string]string{
+					"traefik.enable":                                            "true",
+					"traefik.http.routers.uat-router.rule":                      "Host(`uat.github.com`)",
+					"traefik.http.routers.uat-router.service":                   "uat-service",
+					"traefik.http.services.uat-service.loadbalancer.server.port": "9898",
+				},
+				IPs: []internal.IP{
+					{Address: "10.0.10.101", AddressType: "ipv4"},
+				},
+			},
+			{
+				ID:   102,
+				Name: "uat-02",
+				Config: map[string]string{
+					"traefik.enable":                                            "true",
+					"traefik.http.routers.uat-router.rule":                      "Host(`uat.github.com`)",
+					"traefik.http.routers.uat-router.service":                   "uat-service",
+					"traefik.http.services.uat-service.loadbalancer.server.port": "9898",
+				},
+				IPs: []internal.IP{
+					{Address: "10.0.10.102", AddressType: "ipv4"},
+				},
+			},
+		},
+	}
+
+	config := generateConfiguration(mockServicesMap)
+	
+	assert.Contains(t, config.HTTP.Services, "uat-service")
+	
+	targetService := config.HTTP.Services["uat-service"]
+	assert.NotNil(t, targetService.LoadBalancer)
+	
+	assert.Len(t, targetService.LoadBalancer.Servers, 2, "Expected 2 server endpoints clustered into a single loadbalancer service block.")
+
+	assert.Equal(t, "http://10.0.10.101:9898", targetService.LoadBalancer.Servers[0].URL)
+	assert.Equal(t, "http://10.0.10.102:9898", targetService.LoadBalancer.Servers[1].URL)
+	}
+
+func TestGenerateConfiguration_AppendsSingleLXCsToOneService(t *testing.T) {
+	// 1. Mock a services layout simulating two running LXC containers on the same node
+	mockServicesMap := map[string][]internal.Service{
+		"pve-node-01": {
+			{
+				ID:   101,
+				Name: "uat-01",
+				Config: map[string]string{
+					"traefik.enable":                                            "true",
+					"traefik.http.routers.uat-router.rule":                      "Host(`uat.github.com`)",
+					"traefik.http.routers.uat-router.service":                   "uat-service",
+					"traefik.http.services.uat-service.loadbalancer.server.port": "9898",
+				},
+				IPs: []internal.IP{
+					{Address: "10.0.10.101", AddressType: "ipv4"},
+				},
+			},
+		},
+	}
+
+	config := generateConfiguration(mockServicesMap)
+	
+	assert.Contains(t, config.HTTP.Services, "uat-service")
+	
+	targetService := config.HTTP.Services["uat-service"]
+	assert.NotNil(t, targetService.LoadBalancer)
+	
+	assert.Len(t, targetService.LoadBalancer.Servers, 1, "Expected 1 server endpoints clustered into a single loadbalancer service block.")
+
+	assert.Equal(t, "http://10.0.10.101:9898", targetService.LoadBalancer.Servers[0].URL)
+}
